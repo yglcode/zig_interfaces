@@ -1,2 +1,2 @@
 # zig_interfaces
-Interfaces in ziglang
+Interfaces (vtab/dynamic dispatch) code idioms/patterns in ziglang
