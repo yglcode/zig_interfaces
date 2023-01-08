@@ -1,7 +1,7 @@
 ## Interface idioms/patterns in zig standard libraries ##
 
 ### introduction ###
-In zig, you can declare functions in namespace of struct, enum, union and opaque. Functions whose 1st argument has type of its containing struct/enum/union/opaque are methods which can be invoked through dot syntax. Java and Go support "interface" for creating abstractions with a group of methods (or method-set). Normally interfaces hold so-called vtable for dynamic dispatching. Although zig doesn't support interface as a language feature yet, its standard libraries apply a few code idioms or patterns to achieve similar effects. 
+In zig, you can declare functions in struct, enum, union and opaque. Functions whose 1st argument has type of its containing struct/enum/union/opaque are methods which can be invoked through dot syntax. Java and Go support "interface" for creating abstractions with a group of methods (or method-set). Normally interfaces hold so-called vtable for dynamic dispatching. Although zig doesn't support interface as a language feature yet, its standard libraries apply a few code idioms or patterns to achieve similar effects. 
 
 Similar to other languages, zig code idiom and patterns enable:
 * type checking instance/object methods against interface types at compile time,
@@ -13,7 +13,7 @@ There are some notable differences:
 
 The following are study notes of zig's code idioms/patterns for dynamic dispatching, with code extracts from zig standard libraries. To focus on vtab/dynamic dispatching, utility methods are removed and code are modified a bit to fit Go's model of small interfaces independent from concrete types.
 
-Full code is located in this [repo](https://github.com/yglcode/zig_interfaces) and you can run it with "zig test".
+Full code is located in this [repo](https://github.com/yglcode/zig_interfaces) and you can run it with "zig test interfaces.zig".
 
 ### set up ###
 Let's use the classical OOP example, create a few shapes: Point, Box and Circle.
@@ -104,7 +104,9 @@ test "union_as_intf" {
 }
 ```
 ### interface 2: 1st implementation of vtable and dynamic disptaching ###
-Zig has switched from old style dynamic dispatching based on embedded vtab and #fieldParentPtr(), to the following pattern based on "fat pointer" interface; please go to this article for more details ["Allocgate is coming in Zig 0.9,..."](https://pithlessly.github.io/allocgate.html). Interface std.mem.Allocator uses this pattern, and all standard allocators, std.heap.[ArenaAllocator,GeneralPurposeAllocator,...] have a method "allocator() Allocator" to expose this interface. The following code changed a bit to douple the interface from implementations.
+Zig has switched from old style dynamic dispatching based on embedded vtab and #fieldParentPtr(), to the following pattern based on "fat pointer" interface; please go to this article for more details ["Allocgate is coming in Zig 0.9,..."](https://pithlessly.github.io/allocgate.html). 
+
+Interface std.mem.Allocator uses this pattern, and all standard allocators, std.heap.[ArenaAllocator, GeneralPurposeAllocator, ...] have a method "allocator() Allocator" to expose this interface. The following code changed a bit to douple the interface from implementations.
 
 ``` zig
 const Shape2 = struct {
@@ -171,8 +173,9 @@ test "vtab1_as_intf" {
 ### interface 3: 2nd implementation of vtab and dynamic dispatch ###
 In above 1st implementation, when "casting" a Box into interface Shape2 thru Shape2.init(), the box instance is type-checked for implementing the methods of Shape2 (matching signatures including names). There are two changes in the 2nd implementation: 
 * the vtable is inlined in the interface struct (possible minus point, interface size increased).
-* methods to be type checked against interface are explicitly passed in as function pointers, that possiblely enable the use case of passing in different methods, as long as they have same arguments/return types. For examples, if Box has extra methods, stopAt(i32,i32) or even scale(i32,i32), we can pass them in in place of move().
-Interface std.rand.Random and all std.rand.[Pcg,Sfc64,...] use this pattern.
+* methods to be type checked against interface are explicitly passed in as function pointers, that possiblely enable the use case of passing in different methods, as long as they have same arguments/return types. For examples, if Box has extra methods, stopAt(i32,i32) or even scale(i32,i32), we can pass them in place of move().
+
+Interface std.rand.Random and all std.rand.[Pcg, Sfc64, ...] use this pattern.
 ``` zig
 const Shape3 = struct {
     // define interface fields: ptr,vtab
@@ -235,7 +238,7 @@ test "vtab2_as_intf" {
 }
 ```
 ### interface 4: old style dynamic dispatch using embedded vtab and @fieldParentPtr() ###
-Interface std.build.Step and all build steps std.build.[RunStep,FmtStep,...] still use this pattern.
+Interface std.build.Step and all build steps std.build.[RunStep, FmtStep, ...] still use this pattern.
 
 ``` zig
 // define interface/vtab
@@ -323,7 +326,8 @@ test "vtab3_embedded_in_struct" {
 ```
 ### interface 5: generic interface at compile time ###
 All above interfaces focus on vtab and dynamic dispatching: the interface values will hide the types of concrete values it holds. So you can put these interfaces values into an array and handle them uniformly.
-With zig's compile-time computation, you can define generic algorithms which can work with any type which provides the methods or operators required by the generic algorithm in function body. For example, we can define a generic algorithm:
+
+With zig's compile-time computation, you can define generic algorithms which can work with any type which provides the methods or operators required by the code in function body. For example, we can define a generic algorithm:
 
 ``` zig
 fn update_graphics(shape: anytype, dx: i32, dy: i32) void {
@@ -332,8 +336,11 @@ fn update_graphics(shape: anytype, dx: i32, dy: i32) void {
 }
 ```
 As shown above, "shape" can be anytype as long as it provides move() and draw() methods. All type checking happen at comptime and no dynamic dispatching.
+
 As following, we can define a generic interface which capture the methods required by some generic algorithm; and we can use it to adapt some types/instances with different method names into the required api.
-Interface std.io[Reader,Writer] and std.fifo and std.fs.File use this pattern.
+
+Interface std.io.[Reader, Writer] and std.fifo and std.fs.File use this pattern.
+
 Since these generic interfaces do not erase the type info of the values it hold, they are different types. Thus you cannot put them into an array for handling uniformally.
 
 ``` zig
@@ -385,7 +392,6 @@ We can test it as following:
 ``` zig
 test "generic_interface" {
     var box = Box.init(Point{}, Point{ .x = 2, .y = 3 });
-    print("\n", .{});
     //apply generic algorithms to matching types directly
     update_graphics(&box, 11, 22);
     var textarea = TextArea.init(Point{}, "hello zig!");
